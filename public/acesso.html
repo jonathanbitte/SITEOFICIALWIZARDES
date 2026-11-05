@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Acesse sua conta | Material Didático WIP</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Plus+Jakarta+Sans:wght@800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="fluxo.css">
+</head>
+<body>
+  <header><div class="topo">
+    <a href="index.html"><img src="img/wizard-logo.png" alt="Wizard by Pearson"></a>
+    <span>Material didático WIP</span>
+  </div></header>
+
+  <main><div class="cartao">
+    <p id="erro" class="erro" role="alert" hidden></p>
+
+    <!-- Etapa 2: escolher a escola (aparece se não vier ?escola= na URL) -->
+    <section id="escolher" hidden>
+      <h1>Selecione a escola do aluno</h1>
+      <div id="lista-escolas" class="grade-escolas"></div>
+    </section>
+
+    <!-- Etapa 3: primeiro acesso ou já sou aluno -->
+    <section id="acesso" hidden>
+      <div class="linha-topo"><a href="acesso.html">Voltar</a></div>
+      <div class="cabeca-escola"><img id="logo-escola" alt=""><strong id="nome-escola"></strong></div>
+      <h1>Acesse sua conta</h1>
+
+      <a class="opcao" id="primeiro" href="#">
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#e3284d" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+        <span><strong>Primeiro acesso</strong><small>Faça seu cadastro para comprar o material didático.</small></span>
+        <svg class="seta" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="9 6 15 12 9 18"/></svg>
+      </a>
+
+      <a class="opcao aluno" id="aluno" href="#">
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#112347" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true"><path d="M2 9l10-5 10 5-10 5z"/><path d="M6 11.5V16c0 1.5 3 3 6 3s6-1.5 6-3v-4.5"/></svg>
+        <span><strong>Já sou aluno</strong><small>Faça login com seu e-mail e senha para acessar.</small></span>
+        <svg class="seta" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="9 6 15 12 9 18"/></svg>
+      </a>
+    </section>
+  </div></main>
+
+  <script>
+    const slug = new URLSearchParams(location.search).get('escola');
+    const erro = document.getElementById('erro');
+
+    (async () => {
+      try {
+        const r = await fetch('/api/escolas');
+        if (!r.ok) throw new Error();
+        const escolas = await r.json();
+        const escola = escolas.find((e) => e.slug === slug);
+
+        if (escola) {
+          document.getElementById('nome-escola').textContent = escola.nome;
+          const logo = document.getElementById('logo-escola');
+          logo.onerror = () => logo.remove();
+          logo.src = 'images/escolas/' + escola.slug + '.png';
+          const q = '?escola=' + encodeURIComponent(escola.slug);
+          document.getElementById('primeiro').href = 'cadastro.html' + q;
+          document.getElementById('aluno').href = 'login.html' + q;
+          document.getElementById('acesso').hidden = false;
+        } else {
+          const lista = document.getElementById('lista-escolas');
+          for (const e of escolas) {
+            const a = document.createElement('a');
+            a.className = 'opcao escola';
+            a.href = 'acesso.html?escola=' + encodeURIComponent(e.slug);
+            const img = document.createElement('img');
+            img.alt = '';
+            img.onerror = () => img.remove();
+            img.src = 'images/escolas/' + e.slug + '.png';
+            const s = document.createElement('strong');
+            s.textContent = e.nome;
+            a.append(img, s);
+            lista.append(a);
+          }
+          document.getElementById('escolher').hidden = false;
+        }
+      } catch {
+        erro.textContent = 'Não foi possível carregar as escolas. Tente novamente em instantes.';
+        erro.hidden = false;
+      }
+    })();
+  </script>
+</body>
+</html>

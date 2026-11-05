@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pagamento | Material Didático WIP</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Plus+Jakarta+Sans:wght@800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="fluxo.css">
+  <style>
+    .resumo{margin:0 0 20px;padding:0;list-style:none;border:1px solid var(--line);border-radius:12px}
+    .resumo li{display:flex;justify-content:space-between;gap:16px;padding:12px 16px;font-size:14px}
+    .resumo li+li{border-top:1px solid var(--line)}
+    .resumo span{color:var(--gray)}
+    .resumo strong{color:var(--navy);text-align:right}
+  </style>
+</head>
+<body>
+  <header><div class="topo">
+    <a href="index.html"><img src="img/wizard-logo.png" alt="Wizard by Pearson"></a>
+    <span>Material didático WIP</span>
+  </div></header>
+
+  <main><div class="cartao">
+    <h1 id="titulo">Carregando...</h1>
+    <p id="erro" class="erro" role="alert" hidden></p>
+    <ul class="resumo" id="resumo" hidden>
+      <li><span>Escola</span><strong id="escola"></strong></li>
+      <li><span>Aluno</span><strong id="aluno"></strong></li>
+      <li><span>Livro (série)</span><strong id="serie"></strong></li>
+    </ul>
+    <button class="btn" id="pagar" type="button" hidden>Ir para o pagamento</button>
+    <button class="btn sec" id="sair" type="button" hidden>Sair</button>
+  </div></main>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    (async () => {
+      const me = await fetch('/api/me');
+      if (!me.ok) return location.replace('acesso.html');
+      const u = await me.json();
+      $('titulo').textContent = 'Olá, ' + u.nome;
+      $('sair').hidden = false;
+      $('sair').addEventListener('click', async () => {
+        await fetch('/api/logout', { method: 'POST' });
+        location.href = 'acesso.html';
+      });
+
+      const r = await fetch('/api/pagamento');
+      const p = await r.json().catch(() => ({}));
+      if (!r.ok) { $('erro').textContent = p.erro || 'Não foi possível carregar o pedido.'; $('erro').hidden = false; return; }
+      $('escola').textContent = p.escola;
+      $('aluno').textContent = p.aluno;
+      $('serie').textContent = p.serie;
+      $('resumo').hidden = false;
+      if (!p.link) {
+        $('erro').textContent = 'O pagamento online desta escola ainda não está disponível. Fale com a secretaria.';
+        $('erro').hidden = false;
+        return;
+      }
+      $('pagar').hidden = false;
+      $('pagar').addEventListener('click', () => { location.href = p.link; });
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cadastros | Área administrativa</title>
+
+  <style>
+    :root {
+      font-family: Inter, system-ui, sans-serif;
+      color: #112347;
+      background: #f5f7fb;
+    }
+
+    body {
+      margin: 0;
+      padding: 32px;
+    }
+
+    main {
+      max-width: 1200px;
+      margin: auto;
+      background: #fff;
+      padding: 28px;
+      border-radius: 16px;
+      box-shadow: 0 10px 30px #11234718;
+    }
+
+    h1 {
+      margin-top: 0;
+    }
+
+    .barra {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 20px;
+    }
+
+    button {
+      border: 0;
+      border-radius: 8px;
+      padding: 11px 16px;
+      background: #112347;
+      color: white;
+      cursor: pointer;
+      font-weight: 700;
+    }
+
+    button.sec {
+      background: #e7edf7;
+      color: #112347;
+    }
+
+    button.perigo {
+      background: #b42318;
+      color: white;
+    }
+
+    #status {
+      color: #667085;
+      margin: 12px 0;
+    }
+
+    .tabela {
+      overflow: auto;
+    }
+
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      font-size: 14px;
+    }
+
+    th,
+    td {
+      padding: 10px 12px;
+      border-bottom: 1px solid #e6eaf0;
+      text-align: left;
+      white-space: nowrap;
+    }
+
+    th {
+      background: #f0f4fa;
+      position: sticky;
+      top: 0;
+    }
+  </style>
+</head>
+
+<body>
+  <main>
+    <h1>Cadastros criados</h1>
+
+    <p id="status">
+      Informe a senha administrativa para carregar a lista.
+    </p>
+
+    <div class="barra">
+      <button id="carregar" type="button">
+        Carregar lista
+      </button>
+
+      <button id="baixar" class="sec" type="button" disabled>
+        Baixar planilha Excel
+      </button>
+
+      <button id="resetar" class="perigo" type="button">
+        Resetar lista
+      </button>
+
+      <button id="sair" class="sec" type="button">
+        Voltar ao site
+      </button>
+    </div>
+
+    <div class="tabela">
+      <table>
+        <thead>
+          <tr>
+            <th>Data</th>
+            <th>Escola</th>
+            <th>Livro (série)</th>
+            <th>Aluno</th>
+            <th>Nascimento</th>
+            <th>Responsável</th>
+            <th>E-mail</th>
+            <th>Celular</th>
+          </tr>
+        </thead>
+
+        <tbody id="linhas"></tbody>
+      </table>
+    </div>
+  </main>
+
+  <script>
+    const status = document.getElementById('status');
+    const linhas = document.getElementById('linhas');
+
+    // Guarda a autorização somente durante a sessão desta aba
+    let authorization = '';
+
+    async function carregar() {
+      status.textContent = 'Carregando...';
+      linhas.replaceChildren();
+
+      const resposta = await fetch(
+        '/admin/cadastros.json',
+        {
+          credentials: 'same-origin'
+        }
+      );
+
+      if (!resposta.ok) {
+        status.textContent =
+          resposta.status === 401
+            ? 'Senha administrativa incorreta ou expirada.'
+            : 'Não foi possível carregar a lista.';
+
+        return;
+      }
+
+      const dados = await resposta.json();
+
+      dados.forEach(cadastro => {
+        const tr = document.createElement('tr');
+
+        const valores = [
+          cadastro.criado_em,
+          cadastro.escola,
+          cadastro.serie,
+          cadastro.aluno,
+          cadastro.nascimento,
+          cadastro.responsavel,
+          cadastro.email,
+          cadastro.celular
+        ];
+
+        valores.forEach(valor => {
+          const td = document.createElement('td');
+          td.textContent =
+            valor == null ? '' : String(valor);
+          tr.appendChild(td);
+        });
+
+        linhas.appendChild(tr);
+      });
+
+      status.textContent =
+        dados.length === 1
+          ? '1 cadastro encontrado.'
+          : `${dados.length} cadastros encontrados.`;
+
+      document.getElementById('baixar').disabled = false;
+    }
+
+    document.getElementById('carregar').onclick = carregar;
+
+    document.getElementById('baixar').onclick =
+      async () => {
+        const resposta = await fetch(
+          '/admin/cadastros.xls',
+          {}
+        );
+
+        if (!resposta.ok) {
+          status.textContent =
+            'Não foi possível baixar a planilha.';
+
+          return;
+        }
+
+        const arquivo = await resposta.blob();
+        const link = document.createElement('a');
+
+        link.href = URL.createObjectURL(arquivo);
+        link.download = 'cadastros-wip.xls';
+        link.click();
+
+        setTimeout(() => {
+          URL.revokeObjectURL(link.href);
+        }, 1000);
+      };
+
+    document.getElementById('resetar').onclick =
+      async () => {
+        const confirmou = window.confirm(
+          'ATENÇÃO: todos os cadastros e contas de responsáveis serão apagados. ' +
+          'Essa ação não pode ser desfeita. Deseja continuar?'
+        );
+
+        if (!confirmou) {
+          return;
+        }
+
+
+        const resposta = await fetch(
+          '/admin/cadastros/reset',
+          {
+            method: 'POST',
+          }
+        );
+
+        if (!resposta.ok) {
+          status.textContent =
+            resposta.status === 401
+              ? 'Senha incorreta. A lista não foi alterada.'
+              : 'Não foi possível resetar a lista.';
+
+          return;
+        }
+
+        linhas.replaceChildren();
+
+        status.textContent =
+          'Lista resetada. Nenhum cadastro encontrado.';
+
+        document.getElementById('baixar').disabled = true;
+      };
+
+    document.getElementById('sair').onclick =
+      () => {
+        window.location.href = '/';
+      };
+
+  </script>
+</body>
+</html>
