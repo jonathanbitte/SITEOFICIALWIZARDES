@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Material Didático WIP | Wizard by Pearson</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap"
+    rel="stylesheet">
+  <style>
+    /* Landing Page Styles */
+    .hero-landing {
+      padding: 60px 20px 80px;
+      background: linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);
+      text-align: center;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .hero-landing h1 {
+      font-size: 36px;
+      color: var(--navy);
+      line-height: 1.25;
+      max-width: 720px;
+      margin: 16px auto;
+    }
+
+    .hero-landing p {
+      font-size: 18px;
+      color: var(--gray);
+      max-width: 600px;
+      margin: 0 auto 32px;
+    }
+
+    .cta-button {
+      display: inline-block;
+      background: var(--red);
+      color: #ffffff;
+      font-weight: 800;
+      font-size: 16px;
+      padding: 18px 36px;
+      border-radius: 50px;
+      text-decoration: none;
+      box-shadow: 0 10px 25px rgba(220, 38, 38, 0.25);
+      transition: transform 0.2s, box-shadow 0.2s;
+      border: none;
+      cursor: pointer;
+    }
+
+    .cta-button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 14px 30px rgba(220, 38, 38, 0.35);
+    }
+
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 30px;
+      padding: 60px 20px;
+    }
+
+    .feature-card {
+      background: #ffffff;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 28px;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .feature-card h3 {
+      font-size: 18px;
+      color: var(--navy);
+      margin-bottom: 10px;
+    }
+
+    .feature-card p {
+      font-size: 14px;
+      color: var(--gray);
+    }
+
+    /* Modal de Cadastro */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(15, 23, 42, 0.6);
+      backdrop-filter: blur(4px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      z-index: 1000;
+    }
+
+    .modal-overlay.active {
+      display: flex;
+    }
+
+    .modal-content {
+      background: #ffffff;
+      border-radius: var(--radius);
+      padding: 32px;
+      max-width: 520px;
+      width: 100%;
+      max-height: 90vh;
+      overflow-y: auto;
+      position: relative;
+      box-shadow: var(--shadow-md);
+    }
+
+    .modal-close {
+      position: absolute;
+      top: 16px;
+      right: 20px;
+      background: none;
+      border: none;
+      font-size: 24px;
+      cursor: pointer;
+      color: var(--gray);
+    }
+  </style>
+  <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+
+  <header>
+    <div class="wrap nav">
+      <a href="index.html" class="logo">
+        <img src="images/logodaWIP.png" alt="Wizard International Program" style="height: 85px; width: auto;" />
+      </a>
+      <span class="track-pill">Portal Oficial do Aluno</span>
+    </div>
+  </header>
+
+  <!-- SEÇÃO HERO DA LANDING PAGE -->
+  <section class="hero-landing">
+    <div class="wrap">
+      <span class="eyebrow">Wizard International Program</span>
+      <h1>Adquira seu Material Didático Oficial WIP de Forma Rápida e Segura</h1>
+      <p>Garanta todo o suporte pedagógico e o ecossistema exclusivo de aprendizagem da Wizard para o seu ano letivo.
+      </p>
+      <button onclick="abrirModalCadastro()" class="cta-button">📚 COMPRAR MATERIAL DIDÁTICO</button>
+    </div>
+  </section>
+
+  <!-- SEÇÃO DE INFORMAÇÕES / DIFERENCIAIS -->
+  <main class="wrap">
+    <div class="features-grid">
+      <div class="feature-card">
+        <h3>Processo Simplificado</h3>
+        <p>Basta selecionar a escola e a série do aluno. Nossa equipe cuidará da separação exata do seu material
+          didático.</p>
+      </div>
+      <div class="feature-card">
+        <h3>Pagamento Único e Seguro</h3>
+        <p>Parcelamento facilitado no cartão de crédito ou à vista no Pix com confirmação em tempo real diretamente para
+          a secretaria.</p>
+      </div>
+      <div class="feature-card">
+        <h3>Entrega na Escola</h3>
+        <p>Após a confirmação do pagamento, seu pedido é processado e nossa equipe faz a entrega do material diretamente
+          na escola do aluno.</p>
+      </div>
+    </div>
+  </main>
+
+  <!-- MODAL COM O FORMULÁRIO DE CADASTRO -->
+  <div id="modal-cadastro" class="modal-overlay">
+    <div class="modal-content">
+      <button class="modal-close" onclick="fecharModalCadastro()">&times;</button>
+      <h2 style="font-size: 22px; font-weight: 700; color: var(--navy); margin-bottom: 8px;">Cadastro do Aluno</h2>
+      <p style="font-size: 14px; color: var(--gray); margin-bottom: 24px;">Preencha os dados abaixo para identificarmos
+        seu pagamento na secretaria.</p>
+
+      <form id="student-register-form" class="card-form" onsubmit="salvarCadastroEIrParaCheckout(event)" novalidate>
+        <div style="margin-bottom: 16px;">
+          <label for="student-name">Nome completo do aluno *</label>
+          <input type="text" id="student-name" placeholder="Ex: João Silva" required>
+        </div>
+
+        <div class="row-2" style="margin-bottom: 16px;">
+          <div>
+            <label for="student-cpf">CPF *</label>
+            <input type="text" id="student-cpf" placeholder="000.000.000-00" maxlength="14" required>
+          </div>
+          <div>
+            <label for="student-dob">Data de nascimento *</label>
+            <input type="date" id="student-dob" required>
+          </div>
+        </div>
+
+        <div class="row-2" style="margin-bottom: 16px;">
+          <div>
+            <label for="unidade">Escola *</label>
+            <select id="unidade" name="unidade" required>
+              <option value="" disabled selected>Selecione...</option>
+              <option value="Escola Fundamental 1">Escola Fundamental</option>
+              <!-- Adicione novas opções de escolas aqui -->
+            </select>
+          </div>
+          <div>
+            <label for="livro-aluno">Livro do aluno *</label>
+            <select id="livro-aluno" name="livro-aluno" required>
+              <option value="" disabled selected>Selecione...</option>
+              <option value="1º ANO">1º ANO</option>
+              <option value="2º ANO">2º ANO</option>
+              <option value="3º ANO">3º ANO</option>
+              <option value="4º ANO">4º ANO</option>
+              <option value="5º ANO">5º ANO</option>
+            </select>
+          </div>
+        </div>
+
+        <div style="border-top: 1px solid var(--line); margin: 20px 0; padding-top: 20px;">
+          <div style="margin-bottom: 16px;">
+            <label for="resp-name">Nome do responsável *</label>
+            <input type="text" id="resp-name" placeholder="Ex: Maria Silva" required>
+          </div>
+
+          <div class="row-2">
+            <div>
+              <label for="resp-phone">WhatsApp *</label>
+              <input type="text" id="resp-phone" placeholder="(00) 00000-0000" maxlength="15" required>
+            </div>
+            <div>
+              <label for="resp-email">E-mail *</label>
+              <input type="email" id="resp-email" placeholder="seu@email.com" required>
+            </div>
+          </div>
+        </div>
+
+        <button type="submit" class="btn-pay"
+          style="margin-top: 15px; width: 100%; font-weight: 800; text-transform: uppercase;">CONTINUAR PARA PAGAMENTO
+          →</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- SEÇÃO DE FAQ (TIRE SUAS DÚVIDAS) -->
+  <section class="faq-section">
+    <div class="wrap">
+      <div class="faq-header">
+        <span class="section-tag">SUPORTE E INFORMAÇÕES</span>
+        <h2>Tire suas dúvidas sobre o WIP</h2>
+        <p>Confira as perguntas mais frequentes referentes à aquisição do material e ao funcionamento do programa.</p>
+      </div>
+
+      <!-- SEÇÃO: O QUE É O WIP -->
+      <section class="wip-about-section">
+        <div class="wrap">
+          <div class="wip-about-card collapsed">
+            <div class="wip-about-header" onclick="toggleWipAccordion()" style="cursor: pointer;">
+              <h2>O que é o Wizard for Schools / WIP e por que matricular meu filho?</h2>
+              <span class="wip-toggle-icon" id="wipIcon">+</span>
+            </div>
+
+            <p class="wip-about-desc">
+              O <strong>Wizards for Schools</strong> (também conhecido como <strong>WIP - Wizard International
+                Program</strong>) é um programa de carga horária estendida de inglês com metodologia desenvolvida para
+              atender desde a <strong>Educação Infantil ao Ensino Médio</strong>, ensinando as 4 habilidades do idioma
+              com autonomia desde as primeiras aulas.
+            </p>
+
+            <div class="wip-grid">
+              <div class="wip-feature-box">
+                <div class="wip-icon-wrapper">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+                  </svg>
+                </div>
+                <div>
+                  <h3>Resultados Rápidos</h3>
+                  <p>Resultados mensuráveis e perceptíveis no progresso do aluno.</p>
+                </div>
+              </div>
+
+              <div class="wip-feature-box">
+                <div class="wip-icon-wrapper">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10" />
+                    <polyline points="12 6 12 12 16 14" />
+                  </svg>
+                </div>
+                <div>
+                  <h3>Imersão Cultural</h3>
+                  <p>Aulas dinâmicas com imersão cultural até 5x na semana.</p>
+                </div>
+              </div>
+
+              <div class="wip-feature-box">
+                <div class="wip-icon-wrapper">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+                    <polyline points="9 22 9 12 15 12 15 22" />
+                  </svg>
+                </div>
+                <div>
+                  <h3>Comodidade Total</h3>
+                  <p>Aulas com qualidade Wizard diretamente dentro da escola.</p>
+                </div>
+              </div>
+
+              <div class="wip-feature-box">
+                <div class="wip-icon-wrapper">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polygon
+                      points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                  </svg>
+                </div>
+                <div>
+                  <h3>Metodologia Exclusiva</h3>
+                  <p>Metodologia comprovada da Wizard by Pearson.</p>
+                </div>
+              </div>
+
+              <div class="wip-feature-box">
+                <div class="wip-icon-wrapper">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                    <circle cx="9" cy="7" r="4" />
+                    <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                  </svg>
+                </div>
+                <div>
+                  <h3>Professores Qualificados</h3>
+                  <p>Corpo docente treinado pela equipe pedagógica da Wizard.</p>
+                </div>
+              </div>
+
+              <div class="wip-feature-box">
+                <div class="wip-icon-wrapper">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                  </svg>
+                </div>
+                <div>
+                  <h3>Avaliação Internacional</h3>
+                  <p>Testes de acompanhamento e certificação do progresso do inglês.</p>
+                </div>
+              </div>
+            </div>
+
+            <div class="wip-highlight-card">
+              <div class="wip-highlight-title">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path
+                    d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z" />
+                </svg>
+                Tudo isso sem sair da escola!
+              </div>
+              <p>O Wizards for Schools facilita a adaptação à rotina escolar, garantindo ensino de qualidade e um futuro
+                repleto de oportunidades.</p>
+            </div>
+
+          </div>
+        </div>
+      </section>
+
+      <div class="faq-container">
+        <div class="faq-item">
+          <button class="faq-question" onclick="toggleFaq(this)">
+            <span>O que está incluso no kit do Wizard International Program (WIP)?</span>
+            <span class="faq-icon">+</span>
+          </button>
+          <div class="faq-answer">
+            <p>O kit contempla todo o material didático exclusivo utilizado ao longo do módulo do programa WIP,
+              garantindo que o aluno acompanhe as aulas de forma completa com conteúdo oficial Pearson.</p>
+          </div>
+        </div>
+
+        <div class="faq-item">
+          <button class="faq-question" onclick="toggleFaq(this)">
+            <span>Como é feita a identificação da escola e do livro do aluno?</span>
+            <span class="faq-icon">+</span>
+          </button>
+          <div class="faq-answer">
+            <p>No momento da solicitação neste portal, você informa o nome do aluno, seleciona a Escola e o livro
+              correspondente a classificação(1º ao 5º). Com esses dados, nossa equipe faz a validação e organiza a
+              entrega diretamente na escola.</p>
+          </div>
+        </div>
+
+        <div class="faq-item">
+          <button class="faq-question" onclick="toggleFaq(this)">
+            <span>Quais são as formas de pagamento disponíveis?</span>
+            <span class="faq-icon">+</span>
+          </button>
+          <div class="faq-answer">
+            <p>Você pode realizar o pagamento único de forma simples e rápida através de PIX com aprovação imediata ou
+              via Cartão de Crédito na tela de checkout.</p>
+          </div>
+        </div>
+
+        <div class="faq-item">
+          <button class="faq-question" onclick="toggleFaq(this)">
+            <span>Como sei quando o meu material será entregue?</span>
+            <span class="faq-icon">+</span>
+          </button>
+          <div class="faq-answer">
+            <p>Assim que o pagamento for confirmado, o material didático será preparado para entrega diretamente na
+              escola aluno.</p>
+          </div>
+        </div>
+
+        <div class="faq-item">
+          <button class="faq-question" onclick="toggleFaq(this)">
+            <span>Preciso pagar alguma taxa extra além do valor do material?</span>
+            <span class="faq-icon">+</span>
+          </button>
+          <div class="faq-answer">
+            <p>Não. O valor pago durante este procedimento cobre integralmente a taxa do material didático selecionado,
+              sem nenhum custo oculto adicional.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="wrap footer-row">
+      <span>Wizard International Program — Wizard by Pearson - By Jonathan Bittencurt</span>
+      <span>Loja Oficial WIP</span>
+    </div>
+  </footer>
+
+  <script>
+    function abrirModalCadastro() {
+      document.getElementById('modal-cadastro').classList.add('active');
+    }
+
+    function fecharModalCadastro() {
+      document.getElementById('modal-cadastro').classList.remove('active');
+    }
+
+    // Máscaras rápidas
+    document.getElementById('student-cpf').addEventListener('input', e => {
+      let v = e.target.value.replace(/\D/g, '');
+      v = v.replace(/(\d{3})(\d)/, '$1.$2');
+      v = v.replace(/(\d{3})(\d)/, '$1.$2');
+      v = v.replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+      e.target.value = v;
+    });
+
+    document.getElementById('resp-phone').addEventListener('input', e => {
+      let v = e.target.value.replace(/\D/g, '');
+      v = v.replace(/^(\d{2})(\d)/g, '($1) $2');
+      v = v.replace(/(\d{5})(\d)/, '$1-$2');
+      e.target.value = v;
+    });
+
+    function salvarCadastroEIrParaCheckout(e) {
+      e.preventDefault();
+      const form = document.getElementById('student-register-form');
+      const inputs = form.querySelectorAll('input, select');
+      let valido = true;
+
+      inputs.forEach(input => {
+        if (!input.value.trim()) {
+          input.style.borderColor = 'var(--red)';
+          valido = false;
+        } else {
+          input.style.borderColor = 'var(--line)';
+        }
+      });
+      if (!valido) return;
+
+      const alunoData = {
+        nome: document.getElementById('student-name').value,
+        cpf: document.getElementById('student-cpf').value,
+        nascimento: document.getElementById('student-dob').value,
+        escola: document.getElementById('unidade').value,
+        livro: document.getElementById('livro-aluno').value,
+        responsavel: document.getElementById('resp-name').value,
+        whatsapp: document.getElementById('resp-phone').value,
+        email: document.getElementById('resp-email').value,
+        dataCadastro: new Date().toLocaleDateString('pt-BR')
+      };
+
+      localStorage.setItem('aluno_pendente', JSON.stringify(alunoData));
+      window.location.href = 'checkout.html';
+    }
+
+    function toggleFaq(button) {
+      const item = button.parentElement;
+      document.querySelectorAll('.faq-item').forEach(otherItem => {
+        if (otherItem !== item) {
+          otherItem.classList.remove('active');
+        }
+      });
+      item.classList.toggle('active');
+    }
+
+    function toggleWipAccordion() {
+      const card = document.querySelector('.wip-about-card');
+      const icon = document.getElementById('wipIcon');
+      card.classList.toggle('collapsed');
+      if (card.classList.contains('collapsed')) {
+        icon.innerText = '+';
+      } else {
+        icon.innerText = '−';
+      }
+    }
+  </script>
+</body>
+
+</html>

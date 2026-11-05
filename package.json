@@ -1,0 +1,24 @@
+{
+  "name": "sitewizardes-publicacao-limpa",
+  "version": "1.0.0",
+  "description": "Backend do site Wizard",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "migrate:sqlite": "node migrate-sqlite-to-mysql.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "cookie-parser": "^1.4.7",
+    "dotenv": "^18.0.9",
+    "express": "^5.3.0",
+    "express-rate-limit": "^8.7.2",
+    "jsonwebtoken": "^9.0.3",
+    "mysql2": "^3.15.3",
+    "better-sqlite3": "^13.0.3"
+  }
+}

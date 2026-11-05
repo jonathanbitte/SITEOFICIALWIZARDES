@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <script src="api-config.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Entrar | Material Didático WIP</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Plus+Jakarta+Sans:wght@800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="fluxo.css">
+</head>
+<body>
+  <header><div class="topo">
+    <a href="index.html"><img src="img/wizard-logo.png" alt="Wizard by Pearson"></a>
+    <span>Material didático WIP</span>
+  </div></header>
+
+  <main><div class="cartao">
+    <div class="linha-topo"><a id="voltar" href="acesso.html">Voltar</a></div>
+    <div class="cabeca-escola" id="cabeca" hidden><img id="logo-escola" alt=""><strong id="nome-escola"></strong></div>
+    <h1>Acesse sua conta</h1>
+
+    <p id="erro" class="erro" role="alert" hidden></p>
+
+    <form id="form" novalidate>
+      <div class="campo">
+        <label for="email">E-mail do responsável financeiro</label>
+        <input id="email" type="email" autocomplete="email" placeholder="seu@email.com" required>
+      </div>
+      <div class="campo">
+        <label for="senha">Senha</label>
+        <div class="senha">
+          <input id="senha" type="password" inputmode="text" minlength="8" maxlength="64" autocomplete="current-password" placeholder="Digite sua senha" required>
+          <button type="button" class="olho" id="olho" aria-label="Mostrar senha">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>
+          </button>
+        </div>
+      </div>
+      <button class="btn" id="entrar" type="submit">Entrar</button>
+    </form>
+
+    <p class="ajuda">Ainda não tem cadastro? <a id="cadastro" href="cadastro.html">Faça o primeiro acesso</a></p>
+  </div></main>
+
+  <script>
+    const slug = new URLSearchParams(location.search).get('escola') || '';
+    const q = slug ? '?escola=' + encodeURIComponent(slug) : '';
+    document.getElementById('voltar').href = 'acesso.html' + q;
+    document.getElementById('cadastro').href = 'cadastro.html' + q;
+
+    const form = document.getElementById('form');
+    const email = document.getElementById('email');
+    const senha = document.getElementById('senha');
+    const erro = document.getElementById('erro');
+    const botao = document.getElementById('entrar');
+    const olho = document.getElementById('olho');
+
+    function mostrarErro(msg) { erro.textContent = msg; erro.hidden = false; }
+
+
+    olho.addEventListener('click', () => {
+      const oculta = senha.type === 'password';
+      senha.type = oculta ? 'text' : 'password';
+      olho.setAttribute('aria-label', oculta ? 'Ocultar senha' : 'Mostrar senha');
+    });
+
+    // mostra o nome da escola, se vier na URL
+    if (slug) {
+      apiFetch('/api/escolas').then((r) => r.json()).then((lista) => {
+        const e = lista.find((x) => x.slug === slug);
+        if (!e) return;
+        document.getElementById('nome-escola').textContent = e.nome;
+        const logo = document.getElementById('logo-escola');
+        logo.onerror = () => logo.remove();
+        logo.src = 'images/escolas/' + e.slug + '.png';
+        document.getElementById('cabeca').hidden = false;
+      }).catch(() => {});
+    }
+
+    form.addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      erro.hidden = true;
+      if (!email.value.includes('@') || !/^(?=.*[A-Za-z])(?=.*\d).{8,64}$/.test(senha.value)) {
+        return mostrarErro('Informe o e-mail e uma senha com pelo menos 8 caracteres, usando letras e números.');
+      }
+      botao.disabled = true;
+      botao.textContent = 'Entrando...';
+      try {
+        const r = await apiFetch('/api/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: email.value, senha: senha.value }),
+        });
+        const dados = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(dados.erro || 'Não foi possível entrar.');
+        location.href = 'pagamento.html' + q;
+      } catch (e) {
+        mostrarErro(e.message === 'Failed to fetch' ? 'Sem conexão com o servidor.' : e.message);
+        botao.disabled = false;
+        botao.textContent = 'Entrar';
+      }
+    });
+  </script>
+</body>
+</html>

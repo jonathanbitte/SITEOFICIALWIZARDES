@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cadastros | Área administrativa</title>
+  <script src="api-config.js"></script>
+  <style>
+    :root { font-family: Inter, system-ui, sans-serif; color: #112347; background: #f5f7fb; }
+    body { margin: 0; padding: 32px; }
+    main { max-width: 1200px; margin: auto; background: #fff; padding: 28px; border-radius: 16px; box-shadow: 0 10px 30px #11234718; }
+    h1 { margin-top: 0; }
+    .barra { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; }
+    button { border: 0; border-radius: 8px; padding: 11px 16px; background: #112347; color: white; cursor: pointer; font-weight: 700; }
+    button.sec { background: #e7edf7; color: #112347; }
+    button.perigo { background: #b42318; color: white; }
+    button:disabled { opacity: .5; cursor: not-allowed; }
+    input { box-sizing: border-box; width: 100%; max-width: 420px; padding: 12px; border: 1px solid #ccd4e0; border-radius: 8px; font: inherit; }
+    label { display: block; margin: 12px 0 6px; font-weight: 700; }
+    #status { color: #667085; margin: 12px 0; }
+    .tabela { overflow: auto; }
+    table { border-collapse: collapse; width: 100%; font-size: 14px; }
+    th, td { padding: 10px 12px; border-bottom: 1px solid #e6eaf0; text-align: left; white-space: nowrap; }
+    th { background: #f0f4fa; position: sticky; top: 0; }
+    #painel { display: none; }
+    #login { margin: 20px 0; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Cadastros criados</h1>
+    <p id="status" role="status">Entre com a conta administrativa para acessar os cadastros.</p>
+
+    <section id="login" aria-label="Acesso administrativo">
+      <form id="formLogin">
+        <label for="usuario">Usuário administrativo</label>
+        <input id="usuario" name="usuario" value="admin" autocomplete="username" required maxlength="80">
+        <label for="senha">Senha administrativa</label>
+        <input id="senha" name="senha" type="password" autocomplete="current-password" required>
+        <div class="barra" style="margin-top:16px">
+          <button id="entrar" type="submit">Entrar</button>
+        </div>
+      </form>
+    </section>
+
+    <section id="painel">
+      <div class="barra">
+        <button id="carregar" type="button">Carregar lista</button>
+        <button id="baixarXls" class="sec" type="button" disabled>Baixar Excel</button>
+        <button id="baixarCsv" class="sec" type="button" disabled>Baixar CSV</button>
+        <button id="resetar" class="perigo" type="button">Resetar lista</button>
+        <button id="sair" class="sec" type="button">Sair</button>
+        <button id="voltar" class="sec" type="button">Voltar ao site</button>
+      </div>
+
+      <div class="tabela">
+        <table>
+          <thead>
+            <tr>
+              <th>Data</th><th>Escola</th><th>Livro (série)</th><th>Aluno</th>
+              <th>Nascimento</th><th>Responsável</th><th>E-mail</th><th>Celular</th>
+            </tr>
+          </thead>
+          <tbody id="linhas"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const status = $('status');
+    const linhas = $('linhas');
+
+    function mostrarPainel(autenticado) {
+      $('login').style.display = autenticado ? 'none' : 'block';
+      $('painel').style.display = autenticado ? 'block' : 'none';
+    }
+
+    async function baixar(url, nome) {
+      const resposta = await apiFetch(url);
+      if (resposta.status === 401) {
+        mostrarPainel(false);
+        status.textContent = 'Sua sessão administrativa expirou. Entre novamente.';
+        return;
+      }
+      if (!resposta.ok) {
+        status.textContent = 'Não foi possível gerar o arquivo.';
+        return;
+      }
+      const arquivo = await resposta.blob();
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(arquivo);
+      link.download = nome;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+    }
+
+    $('formLogin').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      $('entrar').disabled = true;
+      status.textContent = 'Autenticando...';
+      try {
+        const resposta = await apiFetch('/api/admin/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ usuario: $('usuario').value, senha: $('senha').value }),
+        });
+        const dados = await resposta.json().catch(() => ({}));
+        if (!resposta.ok) {
+          status.textContent = dados.erro || 'Não foi possível autenticar.';
+          return;
+        }
+        $('senha').value = '';
+        mostrarPainel(true);
+        status.textContent = 'Acesso administrativo autorizado.';
+        await carregar();
+      } catch {
+        status.textContent = 'Não foi possível conectar à API.';
+      } finally {
+        $('entrar').disabled = false;
+      }
+    });
+
+    async function carregar() {
+      status.textContent = 'Carregando cadastros...';
+      linhas.replaceChildren();
+      const resposta = await apiFetch('/admin/cadastros.json');
+      if (resposta.status === 401) {
+        mostrarPainel(false);
+        status.textContent = 'Sua sessão administrativa expirou. Entre novamente.';
+        return;
+      }
+      if (!resposta.ok) {
+        status.textContent = 'Não foi possível carregar a lista.';
+        return;
+      }
+
+      const dados = await resposta.json();
+      dados.forEach((cadastro) => {
+        const tr = document.createElement('tr');
+        [
+          cadastro.criado_em, cadastro.escola, cadastro.serie, cadastro.aluno,
+          cadastro.nascimento, cadastro.responsavel, cadastro.email, cadastro.celular,
+        ].forEach((valor) => {
+          const td = document.createElement('td');
+          td.textContent = valor == null ? '' : String(valor);
+          tr.appendChild(td);
+        });
+        linhas.appendChild(tr);
+      });
+
+      status.textContent = dados.length === 1
+        ? '1 cadastro encontrado.'
+        : `${dados.length} cadastros encontrados.`;
+      $('baixarXls').disabled = false;
+      $('baixarCsv').disabled = false;
+    }
+
+    $('carregar').addEventListener('click', carregar);
+    $('baixarXls').addEventListener('click', () => baixar('/admin/cadastros.xls', 'cadastros-wip.xls'));
+    $('baixarCsv').addEventListener('click', () => baixar('/admin/cadastros.csv', 'cadastros-wip.csv'));
+
+    $('resetar').addEventListener('click', async () => {
+      const confirmou = window.confirm(
+        'ATENÇÃO: todos os cadastros e contas de responsáveis serão apagados. Essa ação não pode ser desfeita. Deseja continuar?'
+      );
+      if (!confirmou) return;
+
+      const resposta = await apiFetch('/admin/cadastros/reset', { method: 'POST' });
+      if (resposta.status === 401) {
+        mostrarPainel(false);
+        status.textContent = 'Sua sessão administrativa expirou. Nenhum dado foi alterado.';
+        return;
+      }
+      if (!resposta.ok) {
+        status.textContent = 'Não foi possível resetar a lista.';
+        return;
+      }
+      linhas.replaceChildren();
+      status.textContent = 'Lista resetada. Nenhum cadastro encontrado.';
+      $('baixarXls').disabled = true;
+      $('baixarCsv').disabled = true;
+    });
+
+    $('sair').addEventListener('click', async () => {
+      await apiFetch('/api/admin/logout', { method: 'POST' });
+      mostrarPainel(false);
+      status.textContent = 'Sessão administrativa encerrada.';
+    });
+    $('voltar').addEventListener('click', () => { window.location.href = '/'; });
+  </script>
+</body>
+</html>
