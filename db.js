@@ -1,4 +1,6 @@
 const mysql = require('mysql2/promise');
+const fs = require('fs');
+const path = require('path');
 
 const required = ['DB_HOST', 'DB_NAME', 'DB_USER', 'DB_PASSWORD'];
 for (const key of required) {
@@ -20,11 +22,10 @@ const pool = mysql.createPool({
   password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME,
 
-  ssl: {
-    minVersion: 'TLSv1.2',
-    rejectUnauthorized: true,
-  },
-
+ssl: {
+  ca: fs.readFileSync(path.join(__dirname, 'ca.pem')),
+  rejectUnauthorized: true
+},
   waitForConnections: true,
   connectionLimit: Number(process.env.DB_CONNECTION_LIMIT || 10),
   queueLimit: 0,
