@@ -10,11 +10,30 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Plus+Jakarta+Sans:wght@800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="fluxo.css">
   <style>
-    .resumo{margin:0 0 20px;padding:0;list-style:none;border:1px solid var(--line);border-radius:12px}
+    .resumo{margin:0 0 20px;padding:0;list-style:none;border:1px solid var(--line);border-radius:6px}
     .resumo li{display:flex;justify-content:space-between;gap:16px;padding:12px 16px;font-size:14px}
     .resumo li+li{border-top:1px solid var(--line)}
     .resumo span{color:var(--gray)}
     .resumo strong{color:var(--navy);text-align:right}
+
+    .aviso-email{margin:0 0 18px;padding:10px 12px;border-left:4px solid var(--red);background:#fff4f5;font-size:13px;line-height:1.45;color:var(--navy)}
+    .titulo-opcoes{margin:0 0 14px;font:800 15px 'Plus Jakarta Sans','Inter',sans-serif;color:var(--navy)}
+
+    .balao{display:flex;align-items:center;gap:12px;margin:0 0 20px;padding:14px 16px;border-radius:8px;background:var(--red);color:#000;font-size:15px;font-weight:700;line-height:1.35;text-decoration:none;box-shadow:0 6px 16px rgba(227,40,77,.25);transition:filter .15s}
+    .balao svg{flex:none}
+    .balao:hover{filter:brightness(.93)}
+    .balao:focus-visible{outline:3px solid #000;outline-offset:2px}
+
+    .btn-pagar{display:block;margin:0 0 10px;padding:14px;border-radius:6px;background:var(--navy);color:#fff;font-size:15px;font-weight:800;text-align:center;text-decoration:none}
+    .btn-pagar.pix{background:var(--red)}
+    .btn-pagar:hover{filter:brightness(.9)}
+    .btn-pagar:focus-visible{outline:3px solid var(--navy);outline-offset:2px}
+    .espera{margin:14px 0 0;font-size:13px;color:var(--gray)}
+    .link-botao{padding:0;border:0;background:none;font:inherit;font-weight:700;color:var(--navy);text-decoration:underline;cursor:pointer}
+
+    .pago{margin:0 0 20px;padding:18px;border:1px solid #b7e1c5;border-radius:6px;background:#eaf7ef;color:#14532d}
+    .pago strong{display:block;margin-bottom:4px;font:800 18px 'Plus Jakarta Sans','Inter',sans-serif}
+    .pago p{margin:8px 0 0;font-size:14px}
   </style>
 </head>
 <body>
@@ -26,17 +45,110 @@
   <main><div class="cartao">
     <h1 id="titulo">Carregando...</h1>
     <p id="erro" class="erro" role="alert" hidden></p>
+
     <ul class="resumo" id="resumo" hidden>
       <li><span>Escola</span><strong id="escola"></strong></li>
       <li><span>Aluno</span><strong id="aluno"></strong></li>
       <li><span>Livro (série)</span><strong id="serie"></strong></li>
     </ul>
-    <button class="btn" id="pagar" type="button" hidden>Ir para o pagamento</button>
+
+    <div class="pago" id="pago" role="status" hidden>
+      <strong>Pagamento aprovado!</strong>
+      <span id="pago-em"></span>
+      <p>Seu pedido do material didático WIP está confirmado. Se tiver qualquer dúvida, fale com o financeiro pelo WhatsApp.</p>
+    </div>
+
+    <section id="pagar" hidden>
+      <p class="aviso-email" id="aviso-auto">No pagamento, use o <strong>mesmo e-mail do cadastro</strong> (<span id="email"></span>). É assim que o site reconhece e confirma a sua compra automaticamente.</p>
+      <h2 class="titulo-opcoes">Escolha como pagar</h2>
+
+      <a class="balao" id="zap" href="#" target="_blank" rel="noopener">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L3 21l1.9-5.4A8 8 0 1 1 21 12z"/></svg>
+        <span>Dúvidas ou problemas com seu pagamento? Clique aqui!</span>
+      </a>
+
+      <a class="btn-pagar" id="btn-cartao" href="#" target="_blank" rel="noopener" hidden>Pagar com cartão de crédito</a>
+      <a class="btn-pagar pix" id="btn-pix" href="#" target="_blank" rel="noopener" hidden>Pagar com PIX</a>
+
+      <p class="espera" id="espera" hidden><span id="espera-texto"></span> <button class="link-botao" id="verificar" type="button">Verificar agora</button></p>
+    </section>
+
     <button class="btn sec" id="sair" type="button" hidden>Sair</button>
   </div></main>
 
   <script>
     const $ = (id) => document.getElementById(id);
+    let pagina = null;       // dados do pedido
+    let temporizador = null;
+    let clicouEmPagar = false;
+
+    function mostrarErro(msg) { $('erro').textContent = msg; $('erro').hidden = false; }
+
+    async function carregar() {
+      const r = await apiFetch('/api/pagamento');
+      if (r.status === 401) return location.replace('acesso.html');
+      const p = await r.json().catch(() => ({}));
+      if (!r.ok) return mostrarErro(p.erro || 'Não foi possível carregar o pedido.');
+      pagina = p;
+      desenhar();
+    }
+
+    function desenhar() {
+      const p = pagina;
+      $('erro').hidden = true;
+      $('escola').textContent = p.escola;
+      $('aluno').textContent = p.aluno;
+      $('serie').textContent = p.serie;
+      $('resumo').hidden = false;
+
+      if (p.pago) {
+        clearInterval(temporizador);
+        $('pagar').hidden = true;
+        $('pago').hidden = false;
+        $('pago-em').textContent = p.pago_em
+          ? 'Confirmado em ' + new Date(p.pago_em.replace(' ', 'T') + 'Z').toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })
+          : '';
+        return;
+      }
+
+      $('pago').hidden = true;
+      $('email').textContent = p.email;
+      const msg = `Olá! Preciso de ajuda com o pagamento do material WIP. Escola: ${p.escola}. Aluno: ${p.aluno}. E-mail do cadastro: ${p.email}.`;
+      $('zap').href = `https://wa.me/${p.whatsapp}?text=${encodeURIComponent(msg)}`;
+
+      $('btn-cartao').hidden = !p.link_cartao;
+      $('btn-pix').hidden = !p.link_pix;
+      if (p.link_cartao) $('btn-cartao').href = p.link_cartao;
+      if (p.link_pix) $('btn-pix').href = p.link_pix;
+      if (!p.link_cartao && !p.link_pix) {
+        mostrarErro('O pagamento online desta escola ainda não está disponível. Fale com a secretaria.');
+      }
+      $('pagar').hidden = false;
+      $('aviso-auto').hidden = !p.confirmacao_automatica;
+      $('espera-texto').textContent = 'Aguardando a confirmação do pagamento. A Cielo pode levar até alguns minutos para avisar o site, e esta página atualiza sozinha.';
+      $('espera').hidden = !(clicouEmPagar && p.confirmacao_automatica);
+    }
+
+    function aoClicarEmPagar(forma) {
+      clicouEmPagar = true;
+      if (pagina && pagina.confirmacao_automatica) $('espera').hidden = false;
+      apiFetch('/api/pagamento/forma', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ forma }),
+        keepalive: true,
+      }).catch(() => {});
+      // só no modo automático: enquanto a pessoa paga na outra aba, esta página confere o status
+      clearInterval(temporizador);
+      if (!pagina || !pagina.confirmacao_automatica) return;
+      let tentativas = 0;
+      temporizador = setInterval(() => {
+        if (document.visibilityState !== 'visible') return;
+        if (++tentativas > 180) return clearInterval(temporizador); // ~30 min
+        carregar();
+      }, 10000);
+    }
+
     (async () => {
       const me = await apiFetch('/api/me');
       if (!me.ok) return location.replace('acesso.html');
@@ -47,21 +159,10 @@
         await apiFetch('/api/logout', { method: 'POST' });
         location.href = 'acesso.html';
       });
-
-      const r = await apiFetch('/api/pagamento');
-      const p = await r.json().catch(() => ({}));
-      if (!r.ok) { $('erro').textContent = p.erro || 'Não foi possível carregar o pedido.'; $('erro').hidden = false; return; }
-      $('escola').textContent = p.escola;
-      $('aluno').textContent = p.aluno;
-      $('serie').textContent = p.serie;
-      $('resumo').hidden = false;
-      if (!p.link) {
-        $('erro').textContent = 'O pagamento online desta escola ainda não está disponível. Fale com a secretaria.';
-        $('erro').hidden = false;
-        return;
-      }
-      $('pagar').hidden = false;
-      $('pagar').addEventListener('click', () => { location.href = p.link; });
+      $('btn-cartao').addEventListener('click', () => aoClicarEmPagar('cartao'));
+      $('btn-pix').addEventListener('click', () => aoClicarEmPagar('pix'));
+      $('verificar').addEventListener('click', carregar);
+      await carregar();
     })();
   </script>
 </body>

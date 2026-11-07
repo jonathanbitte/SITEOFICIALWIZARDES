@@ -399,6 +399,8 @@ app.get('/api/pagamento', exigeLogin, async (req, res) => {
     pago: rows[0].pagamento_status === 'pago',
     email: req.usuario.email,
     whatsapp: WHATSAPP_FINANCEIRO,
+    // vira 'sim' só depois que a Cielo cadastrar as URLs de aviso
+    confirmacao_automatica: process.env.CIELO_CONFIRMACAO_AUTOMATICA === 'sim',
   });
 });
 
@@ -682,6 +684,39 @@ app.post('/admin/alunos/:id/pagamento', exigeOrigemPermitida, exigeAdmin, async 
   );
   if (!r.affectedRows) return res.status(404).json({ erro: 'Aluno não encontrado.' });
   res.json({ ok: true });
+});
+
+// Exclui um aluno específico. Se for o único aluno do responsável, a conta dele também é removida
+// (assim o e-mail volta a ficar livre para um novo cadastro).
+app.post('/admin/alunos/:id/excluir', exigeOrigemPermitida, exigeAdmin, async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id < 1) return res.status(400).json({ erro: 'Aluno inválido.' });
+
+  const conexao = await pool.getConnection();
+  try {
+    await conexao.beginTransaction();
+    const [rows] = await conexao.execute('SELECT responsavel_id FROM alunos WHERE id = ? FOR UPDATE', [id]);
+    if (!rows.length) {
+      await conexao.rollback();
+      return res.status(404).json({ erro: 'Aluno não encontrado.' });
+    }
+    const responsavelId = rows[0].responsavel_id;
+    await conexao.execute('UPDATE pagamentos_cielo SET aluno_id = NULL WHERE aluno_id = ?', [id]);
+    await conexao.execute('DELETE FROM alunos WHERE id = ?', [id]);
+    const [resto] = await conexao.execute('SELECT COUNT(*) AS total FROM alunos WHERE responsavel_id = ?', [responsavelId]);
+    let contaRemovida = false;
+    if (Number(resto[0].total) === 0) {
+      await conexao.execute('DELETE FROM responsaveis WHERE id = ?', [responsavelId]);
+      contaRemovida = true;
+    }
+    await conexao.commit();
+    res.json({ ok: true, contaRemovida });
+  } catch (erro) {
+    await conexao.rollback();
+    throw erro;
+  } finally {
+    conexao.release();
+  }
 });
 
 app.post('/api/logout', exigeOrigemPermitida, (req, res) => {

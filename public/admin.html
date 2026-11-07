@@ -30,7 +30,7 @@
   <main>
     <h1>Cadastros criados</h1>
     <p id="status" role="status">Entre com a conta administrativa para acessar os cadastros.</p>
-
+ 
     <section id="login" aria-label="Acesso administrativo">
       <form id="formLogin">
         <label for="usuario">Usuário administrativo</label>
@@ -42,7 +42,7 @@
         </div>
       </form>
     </section>
-
+ 
     <section id="painel">
       <div class="barra">
         <button id="carregar" type="button">Carregar lista</button>
@@ -52,13 +52,14 @@
         <button id="sair" class="sec" type="button">Sair</button>
         <button id="voltar" class="sec" type="button">Voltar ao site</button>
       </div>
-
+ 
       <div class="tabela">
         <table>
           <thead>
             <tr>
               <th>Data</th><th>Escola</th><th>Livro (série)</th><th>Aluno</th>
               <th>Nascimento</th><th>Responsável</th><th>E-mail</th><th>Celular</th>
+              <th>Pagamento</th><th>Pago em</th><th>Ação</th>
             </tr>
           </thead>
           <tbody id="linhas"></tbody>
@@ -66,17 +67,17 @@
       </div>
     </section>
   </main>
-
+ 
   <script>
     const $ = (id) => document.getElementById(id);
     const status = $('status');
     const linhas = $('linhas');
-
+ 
     function mostrarPainel(autenticado) {
       $('login').style.display = autenticado ? 'none' : 'block';
       $('painel').style.display = autenticado ? 'block' : 'none';
     }
-
+ 
     async function baixar(url, nome) {
       const resposta = await apiFetch(url);
       if (resposta.status === 401) {
@@ -95,7 +96,7 @@
       link.click();
       setTimeout(() => URL.revokeObjectURL(link.href), 1000);
     }
-
+ 
     $('formLogin').addEventListener('submit', async (event) => {
       event.preventDefault();
       $('entrar').disabled = true;
@@ -121,7 +122,7 @@
         $('entrar').disabled = false;
       }
     });
-
+ 
     async function carregar() {
       status.textContent = 'Carregando cadastros...';
       linhas.replaceChildren();
@@ -135,7 +136,7 @@
         status.textContent = 'Não foi possível carregar a lista.';
         return;
       }
-
+ 
       const dados = await resposta.json();
       dados.forEach((cadastro) => {
         const tr = document.createElement('tr');
@@ -147,26 +148,72 @@
           td.textContent = valor == null ? '' : String(valor);
           tr.appendChild(td);
         });
+        const pago = cadastro.pagamento_status === 'pago';
+        const tdStatus = document.createElement('td');
+        tdStatus.textContent = pago ? 'Pago' : 'Pendente';
+        tdStatus.style.fontWeight = '700';
+        tdStatus.style.color = pago ? '#14532d' : '#9a3412';
+        const tdQuando = document.createElement('td');
+        tdQuando.textContent = cadastro.pago_em
+          ? new Date(cadastro.pago_em.replace(' ', 'T') + 'Z').toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })
+          : '';
+        const tdAcao = document.createElement('td');
+        const botao = document.createElement('button');
+        botao.type = 'button';
+        botao.textContent = pago ? 'Desfazer' : 'Marcar como pago';
+        botao.addEventListener('click', async () => {
+          const msg = pago
+            ? 'Voltar este pagamento para pendente?'
+            : `Confirmar manualmente o pagamento de ${cadastro.aluno}?`;
+          if (!window.confirm(msg)) return;
+          const r = await apiFetch(`/admin/alunos/${cadastro.id}/pagamento`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pago: !pago }),
+          });
+          if (r.ok) carregar();
+          else status.textContent = 'Não foi possível atualizar o pagamento.';
+        });
+        const excluir = document.createElement('button');
+        excluir.type = 'button';
+        excluir.textContent = 'Excluir';
+        excluir.style.marginLeft = '8px';
+        excluir.style.color = '#b91c1c';
+        excluir.addEventListener('click', async () => {
+          const ok = window.confirm(
+            `Excluir o cadastro de ${cadastro.aluno}?\nResponsável: ${cadastro.responsavel} (${cadastro.email})\n\n` +
+            'Se este for o único aluno desse responsável, a conta dele também será apagada. Essa ação não pode ser desfeita.'
+          );
+          if (!ok) return;
+          const r = await apiFetch(`/admin/alunos/${cadastro.id}/excluir`, { method: 'POST' });
+          if (r.status === 401) { mostrarPainel(false); status.textContent = 'Sua sessão administrativa expirou. Nada foi apagado.'; return; }
+          if (r.ok) carregar();
+          else status.textContent = 'Não foi possível excluir este cadastro.';
+        });
+        tdAcao.style.whiteSpace = 'nowrap';
+        tdAcao.appendChild(botao);
+        tdAcao.appendChild(excluir);
+        tr.append(tdStatus, tdQuando, tdAcao);
         linhas.appendChild(tr);
       });
-
+ 
       status.textContent = dados.length === 1
         ? '1 cadastro encontrado.'
         : `${dados.length} cadastros encontrados.`;
       $('baixarXls').disabled = false;
       $('baixarCsv').disabled = false;
     }
-
+ 
     $('carregar').addEventListener('click', carregar);
     $('baixarXls').addEventListener('click', () => baixar('/admin/cadastros.xls', 'cadastros-wip.xls'));
     $('baixarCsv').addEventListener('click', () => baixar('/admin/cadastros.csv', 'cadastros-wip.csv'));
-
+ 
     $('resetar').addEventListener('click', async () => {
       const confirmou = window.confirm(
         'ATENÇÃO: todos os cadastros e contas de responsáveis serão apagados. Essa ação não pode ser desfeita. Deseja continuar?'
       );
       if (!confirmou) return;
-
+ 
       const resposta = await apiFetch('/admin/cadastros/reset', { method: 'POST' });
       if (resposta.status === 401) {
         mostrarPainel(false);
@@ -182,7 +229,7 @@
       $('baixarXls').disabled = true;
       $('baixarCsv').disabled = true;
     });
-
+ 
     $('sair').addEventListener('click', async () => {
       await apiFetch('/api/admin/logout', { method: 'POST' });
       mostrarPainel(false);
@@ -192,3 +239,4 @@
   </script>
 </body>
 </html>
+ 
