@@ -71,6 +71,7 @@ app.use((req, res, next) => {
 });
 
 app.use(express.json({ limit: '10kb' }));
+app.use(express.urlencoded({ extended: false, limit: '20kb' })); // a Cielo avisa em formato de formulário
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -374,9 +375,12 @@ app.post('/api/admin/logout', exigeOrigemPermitida, (req, res) => {
 });
 
 // Pagamento: dados do pedido e link Cielo da escola do aluno.
+const WHATSAPP_FINANCEIRO = String(process.env.WHATSAPP_FINANCEIRO || '5527999645606').replace(/\D/g, '');
+
 app.get('/api/pagamento', exigeLogin, async (req, res) => {
   const [rows] = await pool.execute(
-    `SELECT a.nome AS aluno, s.nome AS serie, e.nome AS escola, e.cielo_link AS link
+    `SELECT a.nome AS aluno, s.nome AS serie, e.nome AS escola,
+            e.link_cartao, e.link_pix, a.pagamento_status, a.pago_em
      FROM alunos a
      JOIN series s ON s.id = a.serie_id
      JOIN escolas e ON e.id = s.escola_id
@@ -389,13 +393,33 @@ app.get('/api/pagamento', exigeLogin, async (req, res) => {
   if (!rows.length) {
     return res.status(404).json({ erro: 'Nenhum aluno cadastrado nesta conta.' });
   }
-  res.json(rows[0]);
+  res.set('Cache-Control', 'no-store');
+  res.json({
+    ...rows[0],
+    pago: rows[0].pagamento_status === 'pago',
+    email: req.usuario.email,
+    whatsapp: WHATSAPP_FINANCEIRO,
+  });
+});
+
+// Guarda qual forma o responsável escolheu (cartão ou PIX) ao clicar para pagar
+app.post('/api/pagamento/forma', exigeOrigemPermitida, exigeLogin, async (req, res) => {
+  const forma = req.body && req.body.forma;
+  if (!['cartao', 'pix'].includes(forma)) {
+    return res.status(400).json({ erro: 'Forma de pagamento inválida.' });
+  }
+  await pool.execute(
+    'UPDATE alunos SET forma_pagamento = ? WHERE responsavel_id = ? ORDER BY id DESC LIMIT 1',
+    [forma, req.usuario.id]
+  );
+  res.json({ ok: true });
 });
 
 async function buscarCadastros() {
   const [rows] = await pool.execute(
     `SELECT r.criado_em, e.nome AS escola, s.nome AS serie, a.nome AS aluno,
-            a.nascimento, r.nome AS responsavel, r.email, r.celular
+            a.nascimento, r.nome AS responsavel, r.email, r.celular,
+            a.id, a.pagamento_status, a.pago_em, a.forma_pagamento
      FROM alunos a
      JOIN responsaveis r ON r.id = a.responsavel_id
      JOIN series s ON s.id = a.serie_id
@@ -426,6 +450,9 @@ app.post('/admin/cadastros/reset', exigeOrigemPermitida, exigeAdmin, async (req,
   res.set('Cache-Control', 'no-store');
   res.json({ ok: true });
 });
+
+const statusPagamentoBR = (l) => (l.pagamento_status === 'pago' ? 'Pago' : 'Pendente');
+const formaBR = (f) => ({ cartao: 'Cartão', pix: 'PIX' }[f] || '');
 
 function escaparHtml(valor) {
   return String(valor ?? '')
@@ -478,6 +505,7 @@ app.get('/admin/cadastros.xls', exigeAdmin, async (req, res) => {
   const headers = [
     'Data do cadastro', 'Escola', 'Livro (série)', 'Aluno',
     'Nascimento', 'Idade', 'Responsável', 'E-mail', 'Celular',
+    'Pagamento', 'Pago em', 'Forma escolhida',
   ];
   const cells = (values, header = false) =>
     values.map((value) =>
@@ -496,6 +524,9 @@ app.get('/admin/cadastros.xls', exigeAdmin, async (req, res) => {
       linha.responsavel,
       linha.email,
       celularBR(linha.celular),
+      statusPagamentoBR(linha),
+      dataBR(linha.pago_em, true),
+      formaBR(linha.forma_pagamento),
     ])}</tr>`),
   ];
 
@@ -523,6 +554,7 @@ app.get('/admin/cadastros.csv', exigeAdmin, async (req, res) => {
   const cabecalho = [
     'Data do cadastro', 'Escola', 'Livro (série)', 'Aluno',
     'Nascimento', 'Idade', 'Responsável', 'E-mail', 'Celular',
+    'Pagamento', 'Pago em', 'Forma escolhida',
   ];
   const corpo = linhas.map((linha) => [
     dataBR(linha.criado_em, true),
@@ -534,12 +566,122 @@ app.get('/admin/cadastros.csv', exigeAdmin, async (req, res) => {
     linha.responsavel,
     linha.email,
     celularBR(linha.celular),
+    statusPagamentoBR(linha),
+    dataBR(linha.pago_em, true),
+    formaBR(linha.forma_pagamento),
   ].map(celula).join(';'));
 
   res.set('Cache-Control', 'no-store');
   res.type('text/csv; charset=utf-8');
   res.set('Content-Disposition', 'attachment; filename="cadastros-wip.csv"');
   res.send('\ufeff' + [cabecalho.map(celula).join(';'), ...corpo].join('\r\n'));
+});
+
+// ---------- Cielo: avisos automáticos de pagamento (webhook) ----------
+// No painel da Cielo (E-commerce > Link de Pagamento > Configurações), cadastre:
+//   URL de Notificação:        https://api.wizardes.com.br/api/cielo/SEU_TOKEN/notificacao
+//   URL de Mudança de Status:  https://api.wizardes.com.br/api/cielo/SEU_TOKEN/status
+// (SEU_TOKEN = CIELO_WEBHOOK_TOKEN, nas variáveis do Render). Tipo de notificação: POST.
+const CIELO_TOKEN = process.env.CIELO_WEBHOOK_TOKEN || '';
+const CIELO_PAGO = 2; // payment_status 2 = Pago, no Link de Pagamento da Cielo
+
+function exigeCielo(req, res, next) {
+  if (CIELO_TOKEN.length < 24 || !comparaSegredo(req.params.token, CIELO_TOKEN)) {
+    return res.sendStatus(404);
+  }
+  next();
+}
+
+const texto = (v, max) => (v == null ? null : String(v).trim().slice(0, max) || null);
+const inteiro = (v) => {
+  const n = parseInt(v, 10);
+  return Number.isFinite(n) ? n : null;
+};
+
+// Liga uma compra paga ao aluno certo: primeiro pelo e-mail do comprador, depois pelo CPF
+async function conciliar(checkoutOrder) {
+  const [pgs] = await pool.execute(
+    'SELECT id, email, cpf, status_code, teste, aluno_id FROM pagamentos_cielo WHERE checkout_order = ? LIMIT 1',
+    [checkoutOrder]
+  );
+  const pg = pgs[0];
+  if (!pg || pg.status_code !== CIELO_PAGO || pg.aluno_id || pg.teste) return;
+  if (!pg.email && !pg.cpf) return; // ainda falta o aviso com os dados do comprador
+
+  const base = `SELECT a.id FROM alunos a JOIN responsaveis r ON r.id = a.responsavel_id
+                WHERE a.pagamento_status <> 'pago' AND `;
+  let [alunos] = pg.email
+    ? await pool.execute(base + 'r.email = ? ORDER BY a.id LIMIT 1', [pg.email])
+    : [[]];
+  if (!alunos.length && pg.cpf) {
+    [alunos] = await pool.execute(
+      base + "REPLACE(REPLACE(r.cpf, '.', ''), '-', '') = ? ORDER BY a.id LIMIT 1", [pg.cpf]
+    );
+  }
+  if (!alunos.length) return;
+
+  await pool.execute(
+    "UPDATE alunos SET pagamento_status = 'pago', pago_em = UTC_TIMESTAMP(3) WHERE id = ?",
+    [alunos[0].id]
+  );
+  await pool.execute('UPDATE pagamentos_cielo SET aluno_id = ? WHERE id = ?', [alunos[0].id, pg.id]);
+}
+
+// 1) Finalização: chega quando a pessoa clica em Finalizar na Cielo (traz e-mail e CPF)
+app.post('/api/cielo/:token/notificacao', exigeCielo, async (req, res) => {
+  const b = req.body || {};
+  const checkout = texto(b.checkout_cielo_order_number, 64);
+  if (!checkout) return res.sendStatus(200);
+  const email = (texto(b.customer_email, 191) || '').toLowerCase() || null;
+  const cpf = (texto(b.customer_identity, 20) || '').replace(/\D/g, '') || null;
+  const resumo = JSON.stringify({
+    metodo: b.payment_method_type ?? null,
+    parcelas: b.payment_installments ?? null,
+    criado: b.created_date ?? null,
+  });
+  await pool.execute(
+    `INSERT INTO pagamentos_cielo
+       (checkout_order, order_number, email, cpf, nome, valor_centavos, status_code, teste, payload)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON DUPLICATE KEY UPDATE email = VALUES(email), cpf = VALUES(cpf), nome = VALUES(nome),
+       order_number = VALUES(order_number), valor_centavos = VALUES(valor_centavos), payload = VALUES(payload)`,
+    [checkout, texto(b.order_number, 100), email, cpf, texto(b.customer_name, 190), inteiro(b.amount),
+     inteiro(b.payment_status), String(b.test_transaction).toLowerCase() === 'true' ? 1 : 0, resumo]
+  );
+  await conciliar(checkout);
+  res.sendStatus(200);
+});
+
+// 2) Mudança de status: chega quando o PIX é pago ou o cartão é aprovado/negado
+app.post('/api/cielo/:token/status', exigeCielo, async (req, res) => {
+  const b = req.body || {};
+  const checkout = texto(b.checkout_cielo_order_number, 64);
+  const status = inteiro(b.payment_status);
+  if (!checkout || status == null) return res.sendStatus(200);
+  await pool.execute(
+    `INSERT INTO pagamentos_cielo (checkout_order, order_number, valor_centavos, status_code, teste)
+     VALUES (?, ?, ?, ?, ?)
+     ON DUPLICATE KEY UPDATE status_code = VALUES(status_code)`,
+    [checkout, texto(b.order_number, 100), inteiro(b.amount), status,
+     String(b.test_transaction).toLowerCase() === 'true' ? 1 : 0]
+  );
+  await conciliar(checkout);
+  res.sendStatus(200);
+});
+
+// Confirmação manual no admin (quando o e-mail do pagamento for diferente do cadastro)
+app.post('/admin/alunos/:id/pagamento', exigeOrigemPermitida, exigeAdmin, async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id < 1) return res.status(400).json({ erro: 'Aluno inválido.' });
+  const pago = req.body && req.body.pago === true;
+  const [r] = await pool.execute(
+    pago
+      ? "UPDATE alunos SET pagamento_status = 'pago', pago_em = COALESCE(pago_em, UTC_TIMESTAMP(3)) WHERE id = ?"
+      : "UPDATE alunos SET pagamento_status = 'pendente', pago_em = NULL WHERE id = ?",
+    [id]
+  );
+  if (!r.affectedRows) return res.status(404).json({ erro: 'Aluno não encontrado.' });
+  res.json({ ok: true });
 });
 
 app.post('/api/logout', exigeOrigemPermitida, (req, res) => {

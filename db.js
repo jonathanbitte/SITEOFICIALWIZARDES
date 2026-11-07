@@ -1,6 +1,4 @@
 const mysql = require('mysql2/promise');
-const fs = require('fs');
-const path = require('path');
 
 const required = ['DB_HOST', 'DB_NAME', 'DB_USER', 'DB_PASSWORD'];
 for (const key of required) {
@@ -14,18 +12,12 @@ if (!Number.isInteger(port) || port < 1 || port > 65535) {
   throw new Error('DB_PORT inválida. Informe uma porta entre 1 e 65535.');
 }
 
-
 const pool = mysql.createPool({
   host: process.env.DB_HOST,
   port,
   user: process.env.DB_USER,
   password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME,
-
-ssl: {
-  ca: fs.readFileSync(path.join(__dirname, 'ca.pem')),
-  rejectUnauthorized: true
-},
   waitForConnections: true,
   connectionLimit: Number(process.env.DB_CONNECTION_LIMIT || 10),
   queueLimit: 0,
@@ -39,6 +31,17 @@ ssl: {
   supportBigNumbers: true,
   bigNumberStrings: true,
 });
+
+async function colunaSeNaoExiste(connection, tabela, coluna, definicao) {
+  const [rows] = await connection.execute(
+    `SELECT 1 FROM information_schema.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ? LIMIT 1`,
+    [tabela, coluna]
+  );
+  if (!rows.length) {
+    await connection.query(`ALTER TABLE \`${tabela}\` ADD COLUMN \`${coluna}\` ${definicao}`);
+  }
+}
 
 async function ensureSchema(connection = pool) {
   await connection.execute(`
@@ -100,6 +103,35 @@ async function ensureSchema(connection = pool) {
       CONSTRAINT fk_alunos_series
         FOREIGN KEY (serie_id) REFERENCES series(id)
         ON UPDATE CASCADE ON DELETE RESTRICT
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+
+  // Pagamento: dois links por escola e o status de cada aluno
+  await colunaSeNaoExiste(connection, 'escolas', 'link_cartao', 'TEXT NULL');
+  await colunaSeNaoExiste(connection, 'escolas', 'link_pix', 'TEXT NULL');
+  await colunaSeNaoExiste(connection, 'alunos', 'pagamento_status', "VARCHAR(20) NOT NULL DEFAULT 'pendente'");
+  await colunaSeNaoExiste(connection, 'alunos', 'pago_em', 'DATETIME(3) NULL');
+  await colunaSeNaoExiste(connection, 'alunos', 'forma_pagamento', 'VARCHAR(20) NULL');
+
+  // Avisos recebidos da Cielo (um registro por compra). Sem chave estrangeira de propósito.
+  await connection.execute(`
+    CREATE TABLE IF NOT EXISTS pagamentos_cielo (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+      checkout_order VARCHAR(64) NOT NULL,
+      order_number VARCHAR(100) NULL,
+      email VARCHAR(191) NULL,
+      cpf VARCHAR(20) NULL,
+      nome VARCHAR(190) NULL,
+      valor_centavos INT NULL,
+      status_code INT NULL,
+      teste TINYINT(1) NOT NULL DEFAULT 0,
+      aluno_id BIGINT UNSIGNED NULL,
+      payload TEXT NULL,
+      criado_em DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+      atualizado_em DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+      PRIMARY KEY (id),
+      UNIQUE KEY uq_pagamentos_checkout (checkout_order),
+      KEY idx_pagamentos_email (email)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   `);
 }
@@ -191,12 +223,18 @@ async function seedOfficialData(connection = pool) {
       }
     }
 
-    const link = linksCielo[slug];
-    if (typeof link === 'string' && /^https:\/\//i.test(link)) {
+    const links = linksCielo[slug] || {};
+    const https = (v) => (typeof v === 'string' && /^https:\/\//i.test(v) ? v : null);
+    const cartao = https(links.cartao);
+    const pix = https(links.pix);
+    if (cartao) {
       await connection.execute(
-        'UPDATE escolas SET cielo_link = ? WHERE id = ?',
-        [link, escolaId]
+        'UPDATE escolas SET link_cartao = ?, cielo_link = ? WHERE id = ?',
+        [cartao, cartao, escolaId]
       );
+    }
+    if (pix) {
+      await connection.execute('UPDATE escolas SET link_pix = ? WHERE id = ?', [pix, escolaId]);
     }
   }
 }
